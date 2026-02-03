@@ -84,16 +84,16 @@
 
 <script>
     // === CONFIG ===
-    // Nutze einen öffentlichen ntfy Server oder deinen eigenen
+    // Wir nutzen den öffentlichen Server. 
+    // ACHTUNG: CORS (Browser-Sicherheit) ist hier oft zickig.
     const NTFY_BASE = "https://ntfy.sh"; 
     
     // === STATE ===
     let fileBlob = null;
-    let currentTopic = "";
 
     // === INIT ===
     (function init(){
-        // Check if we are Receiver (Hash contains id and key)
+        // Check ob wir Empfänger sind (Hash enthält id und key)
         if(window.location.hash.includes("id=") && window.location.hash.includes("key=")) {
             showView('viewReceiver');
             receiveMessage();
@@ -112,13 +112,13 @@
         const file = document.getElementById('inpFile').files[0];
         if(!file) return;
         
-        // Simple Image Compression (Canvas)
+        // Bild komprimieren & Vorschau
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 1000;
+                const MAX_WIDTH = 800; // Etwas kleiner für schnelleren Upload
                 let width = img.width;
                 let height = img.height;
 
@@ -131,12 +131,11 @@
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Show Preview
-                const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-                document.getElementById('senderImgPreview').src = dataUrl;
+                // Vorschau zeigen
+                document.getElementById('senderImgPreview').src = canvas.toDataURL("image/jpeg", 0.7);
                 document.getElementById('senderImgPreview').style.display = 'block';
 
-                // Save Blob
+                // Blob speichern
                 canvas.toBlob((b) => { fileBlob = b; }, 'image/jpeg', 0.7);
             }
             img.src = e.target.result;
@@ -150,57 +149,51 @@
 
         const btn = document.querySelector('#viewSender button');
         const oldBtnText = btn.innerText;
-        btn.innerText = "Verschlüssele & Lade hoch...";
+        btn.innerText = "⏳ Sende...";
         btn.disabled = true;
 
         try {
-            // 1. Generate Randoms
-            const topicId = "secret_" + generateId(12); // Unique ID for ntfy
-            const password = generateId(16); // Encryption Key (will be in URL Hash)
+            // 1. IDs generieren
+            // Wir nutzen 'secmsg_' prefix damit man es leichter erkennt
+            const topicId = "secmsg_" + generateId(12); 
+            const password = generateId(16);
 
-            // 2. Prepare Payload JSON
+            // 2. Payload bauen
             let payload = {
                 t: text,
-                i: null, // Image Base64
+                i: null, // Bild kommt hier als Base64 rein
                 ts: Date.now()
             };
 
-            // If image, convert blob to Base64
             if(fileBlob) {
                 payload.i = await blobToBase64(fileBlob);
             }
 
-            // 3. Encrypt Payload
+            // 3. Verschlüsseln
             const jsonStr = JSON.stringify(payload);
             const encryptedData = await encryptText(jsonStr, password);
 
-            // 4. Upload to ntfy
-            // Wir senden es als Datei-Anhang oder Raw Body, aber ntfy hat Limits (4KB für message).
-            // Besser: PUT Request mit dem Body.
-            // ACHTUNG: Bei ntfy Free Tier sind Attachments/Body Size limitiert. 
-            // Für "große" Bilder nutzen wir hier den normalen Body, ntfy erlaubt bis 4MB.
-            
-            await fetch(`${NTFY_BASE}/${topicId}`, {
-                method: 'PUT',
-                body: encryptedData,
-                headers: {
-                    'Title': 'SecretData',
-                    'Cache': 'no' // Don't cache on server too long if possible (ntfy cache defaults to 12h)
-                }
+            // 4. Upload an ntfy (WICHTIGE ÄNDERUNG HIER)
+            // Wir nutzen POST statt PUT und entfernen Header, um CORS Fehler zu vermeiden.
+            const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
+                method: 'POST', 
+                body: encryptedData
             });
 
-            // 5. Generate Link
-            // Format: url.html#id=TOPIC&key=PASSWORD
+            if(!resp.ok) {
+                throw new Error("Upload fehlgeschlagen: " + resp.status);
+            }
+
+            // 5. Link generieren
             const baseUrl = window.location.href.split('#')[0];
             const secretLink = `${baseUrl}#id=${topicId}&key=${password}`;
 
             document.getElementById('resultLink').innerText = secretLink;
-            currentTopic = topicId; // Merken für evtl. cleanup
-
             showView('viewResult');
 
         } catch(e) {
-            alert("Fehler: " + e.message);
+            alert("Fehler beim Senden: " + e.message);
+            console.error(e);
             btn.innerText = oldBtnText;
             btn.disabled = false;
         }
@@ -217,33 +210,41 @@
             return;
         }
 
-        currentTopic = topicId; // Für Delete Button
-
         try {
-            // 1. Fetch from ntfy
-            // Wir holen die JSON (polling/archive endpoint)
+            // 1. Daten holen (poll=1 holt gecachte Nachrichten)
             const resp = await fetch(`${NTFY_BASE}/${topicId}/json?poll=1`);
-            if(!resp.ok) throw new Error("Nachricht nicht gefunden oder abgelaufen.");
-
-            // ntfy liefert JSON Lines (NDJSON). Wir nehmen die erste/neueste Nachricht.
-            const textData = await resp.text();
-            // Parse NDJSON (oft erste Zeile)
-            const lines = textData.trim().split('\n');
-            const lastMsg = JSON.parse(lines[lines.length - 1]);
             
-            // Die verschlüsselten Daten sind im 'message' Feld
-            const encryptedStr = lastMsg.message;
+            if(!resp.ok) throw new Error("Nachricht nicht gefunden (404).");
+            
+            const textData = await resp.text();
+            
+            // WICHTIG: Prüfen ob Antwort leer ist, BEVOR wir parsen
+            if(!textData || textData.trim() === "") {
+                throw new Error("Keine Daten im Topic gefunden.");
+            }
 
-            // 2. Decrypt
+            // ntfy sendet JSON-Lines (eine JSON pro Zeile). Wir nehmen die letzte Zeile.
+            const lines = textData.trim().split('\n');
+            if(lines.length === 0) throw new Error("Leere Antwort.");
+            
+            const lastMsgObj = JSON.parse(lines[lines.length - 1]);
+            
+            // Die eigentliche Nachricht steckt im Feld 'message' oder 'title'
+            // Da wir via POST body gesendet haben, ist es meist 'message'
+            const encryptedStr = lastMsgObj.message;
+
+            if(!encryptedStr) throw new Error("Datenformat falsch.");
+
+            // 2. Entschlüsseln
             const jsonStr = await decryptText(encryptedStr, key);
-            if(!jsonStr) throw new Error("Entschlüsselung fehlgeschlagen (Falscher Key?).");
+            if(!jsonStr) throw new Error("Passwort falsch oder Daten beschädigt.");
 
             const data = JSON.parse(jsonStr);
 
-            // 3. Show
+            // 3. Anzeigen
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('secretContent').classList.remove('hidden');
-            document.getElementById('statusText').innerText = "🔓 Nachricht entschlüsselt";
+            document.getElementById('statusText').innerText = "🔓 Entschlüsselt";
             document.getElementById('statusText').style.color = "var(--accent)";
 
             if(data.t) document.getElementById('decryptedText').innerText = data.t;
@@ -253,8 +254,13 @@
                 document.getElementById('decryptedImg').src = data.i;
                 document.getElementById('decryptedImg').style.display = 'block';
             }
+            
+            // Auto-Delete Versuch (Optional)
+            // Wir versuchen es, aber wenn es fehlschlägt, ist es egal (Empfänger hat die Daten ja schon)
+            fetch(`${NTFY_BASE}/${topicId}`, { method: 'DELETE' }).catch(e => console.log("Delete failed, egal"));
 
         } catch(e) {
+            console.error(e);
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('statusText').innerText = "❌ Fehler: " + e.message;
             document.getElementById('statusText').style.color = "var(--danger)";
@@ -262,56 +268,57 @@
     }
 
     async function destroyMessage() {
-        if(!currentTopic) return;
-        if(!confirm("Wirklich unwiderruflich löschen?")) return;
-        
-        // Eigentlich löscht ntfy automatisch nach 12h. 
-        // Man kann "Löschen" nicht erzwingen bei Public Topics ohne Admin Rechte bei ntfy,
-        // aber wir können client-seitig so tun als ob und die UI resetten.
-        // ODER: Wir nutzen ntfy Pro features.
-        // HACK: Wir können nichts am Server löschen (bei Public ntfy), aber da der Key im Hash war, 
-        // und wir den User jetzt auf die Startseite leiten, ist der Key "vergessen" (außer im Whatsapp verlauf).
-        
-        // Alternativ: Wenn du deinen EIGENEN ntfy server hast, kannst du DELETE requesten.
-        alert("Lösche Daten aus Ansicht...");
         window.location.hash = "";
         location.reload();
     }
 
-    // === CRYPTO HELPERS (AES-GCM) ===
-    // Identisch zu deinem vorherigen Code, minimal angepasst
+    // === CRYPTO (AES-GCM) ===
     const enc = new TextEncoder(); const dec = new TextDecoder();
 
     async function getKey(pass, salt) {
-        const keyMaterial = await window.crypto.subtle.importKey("raw", enc.encode(pass), {name: "PBKDF2"}, false, ["deriveKey"]);
-        return window.crypto.subtle.deriveKey({name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256"}, keyMaterial, {name: "AES-GCM", length: 256}, true, ["encrypt", "decrypt"]);
+        const k = await window.crypto.subtle.importKey("raw", enc.encode(pass), {name: "PBKDF2"}, false, ["deriveKey"]);
+        return window.crypto.subtle.deriveKey({name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256"}, k, {name: "AES-GCM", length: 256}, true, ["encrypt", "decrypt"]);
     }
 
     async function encryptText(plainText, password) {
-        const salt = window.crypto.getRandomValues(new Uint8Array(16));
-        const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        const key = await getKey(password, salt);
-        const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
-        
-        // Combine: Salt + IV + Data -> Base64
-        const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
-        buffer.set(new Uint8Array(salt), 0);
-        buffer.set(new Uint8Array(iv), salt.byteLength);
-        buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
-        
-        return arrayBufferToBase64(buffer);
+        try {
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const key = await getKey(password, salt);
+            const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
+            
+            const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
+            buffer.set(new Uint8Array(salt), 0);
+            buffer.set(new Uint8Array(iv), salt.byteLength);
+            buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
+            
+            // Custom base64 to avoid URL issues
+            let binary = '';
+            for (let i = 0; i < buffer.byteLength; i++) binary += String.fromCharCode(buffer[i]);
+            return btoa(binary);
+        } catch(e) { console.error("Encrypt Fail", e); throw e; }
     }
 
     async function decryptText(base64, password) {
         try {
-            const bytes = base64ToArrayBuffer(base64);
+            // Clean input (just in case)
+            const cleanB64 = base64.trim(); 
+            const binary_string = window.atob(cleanB64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binary_string.charCodeAt(i);
+
             const salt = bytes.slice(0, 16);
             const iv = bytes.slice(16, 28);
             const data = bytes.slice(28);
+            
             const key = await getKey(password, salt);
             const decrypted = await window.crypto.subtle.decrypt({name: "AES-GCM", iv: iv}, key, data);
             return dec.decode(decrypted);
-        } catch(e) { console.error(e); return null; }
+        } catch(e) { 
+            console.error("Decrypt Fail", e); 
+            return null; 
+        }
     }
 
     // === UTILS ===
@@ -324,29 +331,14 @@
     function blobToBase64(blob) {
         return new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result); // inkl. "data:image..."
+            reader.onloadend = () => resolve(reader.result);
             reader.readAsDataURL(blob);
         });
     }
 
-    function arrayBufferToBase64(buffer) {
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        return btoa(binary);
-    }
-
-    function base64ToArrayBuffer(base64) {
-        const binary_string = window.atob(base64);
-        const len = binary_string.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binary_string.charCodeAt(i);
-        return bytes;
-    }
-
     function copyToClipboard() {
         const text = document.getElementById('resultLink').innerText;
-        navigator.clipboard.writeText(text).then(() => alert("Kopiert!"));
+        navigator.clipboard.writeText(text).then(() => alert("Link kopiert!"));
     }
 </script>
 </body>
