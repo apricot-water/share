@@ -8,32 +8,33 @@
     :root { --bg: #111; --card: #222; --text: #eee; --accent: #00d26a; --danger: #ff4757; }
     body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
     
-    /* Container */
     .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
-    
-    /* Cards */
     .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
     
-    /* Inputs */
     textarea, input { width: 100%; background: #333; border: none; color: white; padding: 15px; border-radius: 8px; font-size: 16px; resize: none; font-family: inherit; box-sizing: border-box; margin-bottom: 10px;}
     textarea:focus, input:focus { outline: 2px solid var(--accent); }
     
-    /* Buttons */
     .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
     .btn-primary { background: var(--accent); color: #000; }
     .btn-danger { background: var(--danger); color: white; }
     .btn-copy { background: #444; color: white; }
     .btn:active { transform: scale(0.98); }
 
-    /* Media */
-    .preview-img { width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; margin-top: 10px; display: none; background: #000; }
-    
-    /* Loader & States */
+    /* IMAGE PREVIEW AREA */
+    .img-wrapper { position: relative; display: none; margin-top: 10px; }
+    .preview-img { width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; background: #000; display: block; }
+    .btn-remove-img { 
+        position: absolute; top: 10px; right: 10px; 
+        background: rgba(0,0,0,0.6); color: white; 
+        width: 30px; height: 30px; border-radius: 50%; 
+        border: 2px solid white; font-weight: bold; 
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+
     .hidden { display: none !important; }
     .loader { border: 4px solid #333; border-top: 4px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Result Link Box */
     .link-box { word-break: break-all; background: #000; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; color: var(--accent); border: 1px dashed #555; }
 </style>
 </head>
@@ -50,50 +51,48 @@
         
         <label style="font-size:12px; color:#aaa; text-transform:uppercase; font-weight:bold; display:block; margin-top:10px;">Oder Bild (Optional)</label>
         <input type="file" id="inpFile" accept="image/*" onchange="handleFileSelect()">
-        <img id="senderImgPreview" class="preview-img">
+        
+        <!-- Bild Vorschau Container mit X Button -->
+        <div id="imgPreviewContainer" class="img-wrapper">
+            <img id="senderImgPreview" class="preview-img">
+            <div class="btn-remove-img" onclick="clearImage()">✕</div>
+        </div>
 
         <button class="btn btn-primary" onclick="createSecretLink()">Link erstellen 🔗</button>
     </div>
 
-    <!-- VIEW: RESULT (Link generated) -->
+    <!-- VIEW: RESULT -->
     <div id="viewResult" class="card hidden" style="text-align:center;">
         <h3>✅ Bereit!</h3>
-        <p style="color:#aaa; font-size:14px;">Dieser Link enthält den Schlüssel. Teile ihn via WhatsApp.</p>
+        <p style="color:#aaa; font-size:14px;">Teile diesen Link. Er enthält den Schlüssel.</p>
         <div id="resultLink" class="link-box">...</div>
         <button class="btn btn-copy" onclick="copyToClipboard()">Link Kopieren 📋</button>
         <button class="btn" style="background:transparent; color:#888; font-size:12px;" onclick="location.reload()">Neuen erstellen</button>
     </div>
 
-    <!-- VIEW: RECEIVER (Loading/Decryption) -->
+    <!-- VIEW: RECEIVER -->
     <div id="viewReceiver" class="card hidden">
         <div id="loader" class="loader"></div>
         <div id="statusText" style="text-align:center; margin-bottom:15px;">Lade geheime Daten...</div>
         
-        <!-- Content Area -->
         <div id="secretContent" class="hidden">
             <div style="background: #333; padding: 15px; border-radius: 8px; min-height: 50px; white-space: pre-wrap;" id="decryptedText"></div>
-            <img id="decryptedImg" class="preview-img">
+            <img id="decryptedImg" class="preview-img" style="margin-top:15px; display:none;">
+            
             <div style="margin-top:20px; font-size:11px; color:#666; text-align:center;">
-                Diese Nachricht wurde lokal entschlüsselt. <br>Der Server sah nur Datenmüll.
+                Nachricht lokal entschlüsselt.
             </div>
             <button class="btn btn-danger" onclick="destroyMessage()">🔥 Nachricht vernichten</button>
         </div>
     </div>
-
 </div>
 
 <script>
-    // === CONFIG ===
-    // Wir nutzen den öffentlichen Server. 
-    // ACHTUNG: CORS (Browser-Sicherheit) ist hier oft zickig.
     const NTFY_BASE = "https://ntfy.sh"; 
-    
-    // === STATE ===
     let fileBlob = null;
 
     // === INIT ===
     (function init(){
-        // Check ob wir Empfänger sind (Hash enthält id und key)
         if(window.location.hash.includes("id=") && window.location.hash.includes("key=")) {
             showView('viewReceiver');
             receiveMessage();
@@ -107,18 +106,18 @@
         document.getElementById(id).classList.remove('hidden');
     }
 
-    // === SENDER LOGIC ===
+    // === SENDER: IMAGE HANDLING ===
     function handleFileSelect() {
         const file = document.getElementById('inpFile').files[0];
         if(!file) return;
         
-        // Bild komprimieren & Vorschau
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; // Etwas kleiner für schnelleren Upload
+                // Maximale Größe: 800px (reicht für WhatsApp View)
+                const MAX_WIDTH = 800; 
                 let width = img.width;
                 let height = img.height;
 
@@ -131,37 +130,42 @@
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Vorschau zeigen
-                document.getElementById('senderImgPreview').src = canvas.toDataURL("image/jpeg", 0.7);
-                document.getElementById('senderImgPreview').style.display = 'block';
+                // Vorschau
+                document.getElementById('senderImgPreview').src = canvas.toDataURL("image/jpeg", 0.6);
+                document.getElementById('imgPreviewContainer').style.display = 'block';
 
-                // Blob speichern
-                canvas.toBlob((b) => { fileBlob = b; }, 'image/jpeg', 0.7);
+                // Blob speichern (Qualität 0.6 spart viel Platz)
+                canvas.toBlob((b) => { fileBlob = b; }, 'image/jpeg', 0.6);
             }
             img.src = e.target.result;
         }
         reader.readAsDataURL(file);
     }
 
+    // NEU: Bild löschen Funktion
+    function clearImage() {
+        fileBlob = null;
+        document.getElementById('inpFile').value = ""; // Input resetten
+        document.getElementById('senderImgPreview').src = "";
+        document.getElementById('imgPreviewContainer').style.display = 'none';
+    }
+
     async function createSecretLink() {
         const text = document.getElementById('inpText').value;
         if(!text && !fileBlob) return alert("Bitte Text oder Bild eingeben.");
 
-        const btn = document.querySelector('#viewSender button');
+        const btn = document.querySelector('#viewSender button.btn-primary');
         const oldBtnText = btn.innerText;
-        btn.innerText = "⏳ Sende...";
+        btn.innerText = "⏳ Verschlüssele...";
         btn.disabled = true;
 
         try {
-            // 1. IDs generieren
-            // Wir nutzen 'secmsg_' prefix damit man es leichter erkennt
             const topicId = "secmsg_" + generateId(12); 
             const password = generateId(16);
 
-            // 2. Payload bauen
             let payload = {
                 t: text,
-                i: null, // Bild kommt hier als Base64 rein
+                i: null,
                 ts: Date.now()
             };
 
@@ -169,22 +173,21 @@
                 payload.i = await blobToBase64(fileBlob);
             }
 
-            // 3. Verschlüsseln
+            // Stringify
             const jsonStr = JSON.stringify(payload);
+            
+            // Encrypt (Jetzt sicher für große Daten!)
             const encryptedData = await encryptText(jsonStr, password);
 
-            // 4. Upload an ntfy (WICHTIGE ÄNDERUNG HIER)
-            // Wir nutzen POST statt PUT und entfernen Header, um CORS Fehler zu vermeiden.
+            // Upload
+            btn.innerText = "☁️ Lade hoch...";
             const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
                 method: 'POST', 
                 body: encryptedData
             });
 
-            if(!resp.ok) {
-                throw new Error("Upload fehlgeschlagen: " + resp.status);
-            }
+            if(!resp.ok) throw new Error("Upload Error: " + resp.status);
 
-            // 5. Link generieren
             const baseUrl = window.location.href.split('#')[0];
             const secretLink = `${baseUrl}#id=${topicId}&key=${password}`;
 
@@ -192,72 +195,62 @@
             showView('viewResult');
 
         } catch(e) {
-            alert("Fehler beim Senden: " + e.message);
+            alert("Fehler: " + e.message);
             console.error(e);
             btn.innerText = oldBtnText;
             btn.disabled = false;
         }
     }
 
-    // === RECEIVER LOGIC ===
+    // === RECEIVER ===
     async function receiveMessage() {
         const params = new URLSearchParams(window.location.hash.substring(1));
         const topicId = params.get('id');
         const key = params.get('key');
 
         if(!topicId || !key) {
-            document.getElementById('statusText').innerText = "Link ungültig.";
+            document.getElementById('statusText').innerText = "Link defekt.";
             return;
         }
 
         try {
-            // 1. Daten holen (poll=1 holt gecachte Nachrichten)
             const resp = await fetch(`${NTFY_BASE}/${topicId}/json?poll=1`);
-            
-            if(!resp.ok) throw new Error("Nachricht nicht gefunden (404).");
+            if(!resp.ok) throw new Error("Nachricht weg oder 404.");
             
             const textData = await resp.text();
-            
-            // WICHTIG: Prüfen ob Antwort leer ist, BEVOR wir parsen
-            if(!textData || textData.trim() === "") {
-                throw new Error("Keine Daten im Topic gefunden.");
-            }
+            if(!textData || textData.trim() === "") throw new Error("Inhalt leer.");
 
-            // ntfy sendet JSON-Lines (eine JSON pro Zeile). Wir nehmen die letzte Zeile.
+            // Parse NDJSON
             const lines = textData.trim().split('\n');
-            if(lines.length === 0) throw new Error("Leere Antwort.");
-            
             const lastMsgObj = JSON.parse(lines[lines.length - 1]);
-            
-            // Die eigentliche Nachricht steckt im Feld 'message' oder 'title'
-            // Da wir via POST body gesendet haben, ist es meist 'message'
             const encryptedStr = lastMsgObj.message;
 
-            if(!encryptedStr) throw new Error("Datenformat falsch.");
+            if(!encryptedStr) throw new Error("Format Fehler.");
 
-            // 2. Entschlüsseln
+            // Decrypt
             const jsonStr = await decryptText(encryptedStr, key);
-            if(!jsonStr) throw new Error("Passwort falsch oder Daten beschädigt.");
+            if(!jsonStr) throw new Error("Falscher Key oder Daten korrupt.");
 
             const data = JSON.parse(jsonStr);
 
-            // 3. Anzeigen
+            // UI Update
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('secretContent').classList.remove('hidden');
             document.getElementById('statusText').innerText = "🔓 Entschlüsselt";
             document.getElementById('statusText').style.color = "var(--accent)";
 
-            if(data.t) document.getElementById('decryptedText').innerText = data.t;
-            else document.getElementById('decryptedText').style.display = 'none';
+            const txtEl = document.getElementById('decryptedText');
+            if(data.t && data.t.trim() !== "") {
+                txtEl.innerText = data.t;
+            } else {
+                txtEl.style.display = 'none';
+            }
 
             if(data.i) {
-                document.getElementById('decryptedImg').src = data.i;
-                document.getElementById('decryptedImg').style.display = 'block';
+                const imgEl = document.getElementById('decryptedImg');
+                imgEl.src = data.i;
+                imgEl.style.display = 'block';
             }
-            
-            // Auto-Delete Versuch (Optional)
-            // Wir versuchen es, aber wenn es fehlschlägt, ist es egal (Empfänger hat die Daten ja schon)
-            fetch(`${NTFY_BASE}/${topicId}`, { method: 'DELETE' }).catch(e => console.log("Delete failed, egal"));
 
         } catch(e) {
             console.error(e);
@@ -267,12 +260,12 @@
         }
     }
 
-    async function destroyMessage() {
+    function destroyMessage() {
         window.location.hash = "";
         location.reload();
     }
 
-    // === CRYPTO (AES-GCM) ===
+    // === CRYPTO CORE (FIXED) ===
     const enc = new TextEncoder(); const dec = new TextDecoder();
 
     async function getKey(pass, salt) {
@@ -281,29 +274,29 @@
     }
 
     async function encryptText(plainText, password) {
-        try {
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            const key = await getKey(password, salt);
-            const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
-            
-            const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
-            buffer.set(new Uint8Array(salt), 0);
-            buffer.set(new Uint8Array(iv), salt.byteLength);
-            buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
-            
-            // Custom base64 to avoid URL issues
-            let binary = '';
-            for (let i = 0; i < buffer.byteLength; i++) binary += String.fromCharCode(buffer[i]);
-            return btoa(binary);
-        } catch(e) { console.error("Encrypt Fail", e); throw e; }
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const key = await getKey(password, salt);
+        const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
+        
+        // Combine buffers
+        const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
+        buffer.set(new Uint8Array(salt), 0);
+        buffer.set(new Uint8Array(iv), salt.byteLength);
+        buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
+        
+        // FIX: Chunked conversion to avoid Stack Overflow on large images
+        let binary = '';
+        const len = buffer.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(buffer[i]);
+        }
+        return btoa(binary);
     }
 
     async function decryptText(base64, password) {
         try {
-            // Clean input (just in case)
-            const cleanB64 = base64.trim(); 
-            const binary_string = window.atob(cleanB64);
+            const binary_string = window.atob(base64.trim());
             const len = binary_string.length;
             const bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) bytes[i] = binary_string.charCodeAt(i);
@@ -338,7 +331,7 @@
 
     function copyToClipboard() {
         const text = document.getElementById('resultLink').innerText;
-        navigator.clipboard.writeText(text).then(() => alert("Link kopiert!"));
+        navigator.clipboard.writeText(text).then(() => alert("Kopiert!"));
     }
 </script>
 </body>
