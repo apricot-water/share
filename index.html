@@ -61,16 +61,21 @@
         <button class="btn btn-primary" onclick="createSecretLink()">Link erstellen 🔗</button>
     </div>
 
-    <!-- VIEW: RESULT -->
+<!-- VIEW: RESULT -->
     <div id="viewResult" class="card hidden" style="text-align:center;">
         <h3>✅ Bereit!</h3>
-        <p style="color:#aaa; font-size:14px;">Teile diesen Link. Er enthält den Schlüssel.</p>
-        <div id="resultLink" class="link-box">...</div>
-        <button class="btn btn-copy" onclick="copyToClipboard()">Link Kopieren 📋</button>
+        <p style="color:#aaa; font-size:14px;">Der Link ist fertig.</p>
+        
+        <div id="resultLink" class="link-box" style="margin-bottom:15px;">...</div>
+        
+        <!-- NEU: Native Share Button (WhatsApp & Co) -->
+        <button class="btn btn-primary" onclick="shareLink()">📤 An WhatsApp / Andere senden</button>
+        
+        <button class="btn btn-copy" onclick="copyToClipboard()" style="margin-top:10px;">Nur Link kopieren 📋</button>
         <button class="btn" style="background:transparent; color:#888; font-size:12px;" onclick="location.reload()">Neuen erstellen</button>
     </div>
 
-    <!-- VIEW: RECEIVER -->
+    <!-- VIEW: RECEIVER (Ohne Lösch-Button) -->
     <div id="viewReceiver" class="card hidden">
         <div id="loader" class="loader"></div>
         <div id="statusText" style="text-align:center; margin-bottom:15px;">Lade geheime Daten...</div>
@@ -80,12 +85,10 @@
             <img id="decryptedImg" class="preview-img" style="margin-top:15px; display:none;">
             
             <div style="margin-top:20px; font-size:11px; color:#666; text-align:center;">
-                Nachricht lokal entschlüsselt.
+                Nachricht lokal entschlüsselt. <br>Löscht sich nach 12-24h automatisch vom Server.
             </div>
-            <button class="btn btn-danger" onclick="destroyMessage()">🔥 Nachricht vernichten</button>
         </div>
     </div>
-</div>
 
 <script>
     const NTFY_BASE = "https://ntfy.sh"; 
@@ -352,6 +355,30 @@
         const text = document.getElementById('resultLink').innerText;
         navigator.clipboard.writeText(text).then(() => alert("Kopiert!"));
     }
+
+async function shareLink() {
+        const text = document.getElementById('resultLink').innerText;
+        
+        // Prüfen ob der Browser "Teilen" unterstützt (Android/iOS tun das)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'Geheime Nachricht',
+                    text: 'Hier ist eine verschlüsselte Nachricht für dich:',
+                    url: text
+                });
+                console.log('Erfolgreich geteilt');
+            } catch (err) {
+                // Wenn User abbricht oder Fehler passiert
+                console.log('Teilen abgebrochen', err);
+            }
+        } else {
+            // Fallback für PC Browser ohne Share-Funktion
+            copyToClipboard();
+            alert("Dein Browser unterstützt kein direktes Teilen. Link wurde kopiert!");
+        }
+    }
+    
 </script>
 </body>
 </html>
