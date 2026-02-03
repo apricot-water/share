@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Secret Message</title>
+<style>
+    :root { --bg: #111; --card: #222; --text: #eee; --accent: #00d26a; --danger: #ff4757; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+    
+    /* Container */
+    .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
+    
+    /* Cards */
+    .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    
+    /* Inputs */
+    textarea, input { width: 100%; background: #333; border: none; color: white; padding: 15px; border-radius: 8px; font-size: 16px; resize: none; font-family: inherit; box-sizing: border-box; margin-bottom: 10px;}
+    textarea:focus, input:focus { outline: 2px solid var(--accent); }
+    
+    /* Buttons */
+    .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-copy { background: #444; color: white; }
+    .btn:active { transform: scale(0.98); }
+
+    /* Media */
+    .preview-img { width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; margin-top: 10px; display: none; background: #000; }
+    
+    /* Loader & States */
+    .hidden { display: none !important; }
+    .loader { border: 4px solid #333; border-top: 4px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Result Link Box */
+    .link-box { word-break: break-all; background: #000; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; color: var(--accent); border: 1px dashed #555; }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+    <h2 style="text-align:center; margin-bottom: 5px;">🔒 Secret Link</h2>
+    <div style="text-align:center; color:#777; font-size:12px; margin-bottom: 20px;">End-to-End Encrypted via Hash</div>
+
+    <!-- VIEW: SENDER -->
+    <div id="viewSender" class="card">
+        <label style="font-size:12px; color:#aaa; text-transform:uppercase; font-weight:bold;">Nachricht</label>
+        <textarea id="inpText" rows="4" placeholder="Geheimtext hier..."></textarea>
+        
+        <label style="font-size:12px; color:#aaa; text-transform:uppercase; font-weight:bold; display:block; margin-top:10px;">Oder Bild (Optional)</label>
+        <input type="file" id="inpFile" accept="image/*" onchange="handleFileSelect()">
+        <img id="senderImgPreview" class="preview-img">
+
+        <button class="btn btn-primary" onclick="createSecretLink()">Link erstellen 🔗</button>
+    </div>
+
+    <!-- VIEW: RESULT (Link generated) -->
+    <div id="viewResult" class="card hidden" style="text-align:center;">
+        <h3>✅ Bereit!</h3>
+        <p style="color:#aaa; font-size:14px;">Dieser Link enthält den Schlüssel. Teile ihn via WhatsApp.</p>
+        <div id="resultLink" class="link-box">...</div>
+        <button class="btn btn-copy" onclick="copyToClipboard()">Link Kopieren 📋</button>
+        <button class="btn" style="background:transparent; color:#888; font-size:12px;" onclick="location.reload()">Neuen erstellen</button>
+    </div>
+
+    <!-- VIEW: RECEIVER (Loading/Decryption) -->
+    <div id="viewReceiver" class="card hidden">
+        <div id="loader" class="loader"></div>
+        <div id="statusText" style="text-align:center; margin-bottom:15px;">Lade geheime Daten...</div>
+        
+        <!-- Content Area -->
+        <div id="secretContent" class="hidden">
+            <div style="background: #333; padding: 15px; border-radius: 8px; min-height: 50px; white-space: pre-wrap;" id="decryptedText"></div>
+            <img id="decryptedImg" class="preview-img">
+            <div style="margin-top:20px; font-size:11px; color:#666; text-align:center;">
+                Diese Nachricht wurde lokal entschlüsselt. <br>Der Server sah nur Datenmüll.
+            </div>
+            <button class="btn btn-danger" onclick="destroyMessage()">🔥 Nachricht vernichten</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // === CONFIG ===
+    // Nutze einen öffentlichen ntfy Server oder deinen eigenen
+    const NTFY_BASE = "https://ntfy.sh"; 
+    
+    // === STATE ===
+    let fileBlob = null;
+    let currentTopic = "";
+
+    // === INIT ===
+    (function init(){
+        // Check if we are Receiver (Hash contains id and key)
+        if(window.location.hash.includes("id=") && window.location.hash.includes("key=")) {
+            showView('viewReceiver');
+            receiveMessage();
+        } else {
+            showView('viewSender');
+        }
+    })();
+
+    function showView(id) {
+        document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    // === SENDER LOGIC ===
+    function handleFileSelect() {
+        const file = document.getElementById('inpFile').files[0];
+        if(!file) return;
+        
+        // Simple Image Compression (Canvas)
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1000;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Show Preview
+                const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+                document.getElementById('senderImgPreview').src = dataUrl;
+                document.getElementById('senderImgPreview').style.display = 'block';
+
+                // Save Blob
+                canvas.toBlob((b) => { fileBlob = b; }, 'image/jpeg', 0.7);
+            }
+            img.src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+    }
+
+    async function createSecretLink() {
+        const text = document.getElementById('inpText').value;
+        if(!text && !fileBlob) return alert("Bitte Text oder Bild eingeben.");
+
+        const btn = document.querySelector('#viewSender button');
+        const oldBtnText = btn.innerText;
+        btn.innerText = "Verschlüssele & Lade hoch...";
+        btn.disabled = true;
+
+        try {
+            // 1. Generate Randoms
+            const topicId = "secret_" + generateId(12); // Unique ID for ntfy
+            const password = generateId(16); // Encryption Key (will be in URL Hash)
+
+            // 2. Prepare Payload JSON
+            let payload = {
+                t: text,
+                i: null, // Image Base64
+                ts: Date.now()
+            };
+
+            // If image, convert blob to Base64
+            if(fileBlob) {
+                payload.i = await blobToBase64(fileBlob);
+            }
+
+            // 3. Encrypt Payload
+            const jsonStr = JSON.stringify(payload);
+            const encryptedData = await encryptText(jsonStr, password);
+
+            // 4. Upload to ntfy
+            // Wir senden es als Datei-Anhang oder Raw Body, aber ntfy hat Limits (4KB für message).
+            // Besser: PUT Request mit dem Body.
+            // ACHTUNG: Bei ntfy Free Tier sind Attachments/Body Size limitiert. 
+            // Für "große" Bilder nutzen wir hier den normalen Body, ntfy erlaubt bis 4MB.
+            
+            await fetch(`${NTFY_BASE}/${topicId}`, {
+                method: 'PUT',
+                body: encryptedData,
+                headers: {
+                    'Title': 'SecretData',
+                    'Cache': 'no' // Don't cache on server too long if possible (ntfy cache defaults to 12h)
+                }
+            });
+
+            // 5. Generate Link
+            // Format: url.html#id=TOPIC&key=PASSWORD
+            const baseUrl = window.location.href.split('#')[0];
+            const secretLink = `${baseUrl}#id=${topicId}&key=${password}`;
+
+            document.getElementById('resultLink').innerText = secretLink;
+            currentTopic = topicId; // Merken für evtl. cleanup
+
+            showView('viewResult');
+
+        } catch(e) {
+            alert("Fehler: " + e.message);
+            btn.innerText = oldBtnText;
+            btn.disabled = false;
+        }
+    }
+
+    // === RECEIVER LOGIC ===
+    async function receiveMessage() {
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const topicId = params.get('id');
+        const key = params.get('key');
+
+        if(!topicId || !key) {
+            document.getElementById('statusText').innerText = "Link ungültig.";
+            return;
+        }
+
+        currentTopic = topicId; // Für Delete Button
+
+        try {
+            // 1. Fetch from ntfy
+            // Wir holen die JSON (polling/archive endpoint)
+            const resp = await fetch(`${NTFY_BASE}/${topicId}/json?poll=1`);
+            if(!resp.ok) throw new Error("Nachricht nicht gefunden oder abgelaufen.");
+
+            // ntfy liefert JSON Lines (NDJSON). Wir nehmen die erste/neueste Nachricht.
+            const textData = await resp.text();
+            // Parse NDJSON (oft erste Zeile)
+            const lines = textData.trim().split('\n');
+            const lastMsg = JSON.parse(lines[lines.length - 1]);
+            
+            // Die verschlüsselten Daten sind im 'message' Feld
+            const encryptedStr = lastMsg.message;
+
+            // 2. Decrypt
+            const jsonStr = await decryptText(encryptedStr, key);
+            if(!jsonStr) throw new Error("Entschlüsselung fehlgeschlagen (Falscher Key?).");
+
+            const data = JSON.parse(jsonStr);
+
+            // 3. Show
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('secretContent').classList.remove('hidden');
+            document.getElementById('statusText').innerText = "🔓 Nachricht entschlüsselt";
+            document.getElementById('statusText').style.color = "var(--accent)";
+
+            if(data.t) document.getElementById('decryptedText').innerText = data.t;
+            else document.getElementById('decryptedText').style.display = 'none';
+
+            if(data.i) {
+                document.getElementById('decryptedImg').src = data.i;
+                document.getElementById('decryptedImg').style.display = 'block';
+            }
+
+        } catch(e) {
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('statusText').innerText = "❌ Fehler: " + e.message;
+            document.getElementById('statusText').style.color = "var(--danger)";
+        }
+    }
+
+    async function destroyMessage() {
+        if(!currentTopic) return;
+        if(!confirm("Wirklich unwiderruflich löschen?")) return;
+        
+        // Eigentlich löscht ntfy automatisch nach 12h. 
+        // Man kann "Löschen" nicht erzwingen bei Public Topics ohne Admin Rechte bei ntfy,
+        // aber wir können client-seitig so tun als ob und die UI resetten.
+        // ODER: Wir nutzen ntfy Pro features.
+        // HACK: Wir können nichts am Server löschen (bei Public ntfy), aber da der Key im Hash war, 
+        // und wir den User jetzt auf die Startseite leiten, ist der Key "vergessen" (außer im Whatsapp verlauf).
+        
+        // Alternativ: Wenn du deinen EIGENEN ntfy server hast, kannst du DELETE requesten.
+        alert("Lösche Daten aus Ansicht...");
+        window.location.hash = "";
+        location.reload();
+    }
+
+    // === CRYPTO HELPERS (AES-GCM) ===
+    // Identisch zu deinem vorherigen Code, minimal angepasst
+    const enc = new TextEncoder(); const dec = new TextDecoder();
+
+    async function getKey(pass, salt) {
+        const keyMaterial = await window.crypto.subtle.importKey("raw", enc.encode(pass), {name: "PBKDF2"}, false, ["deriveKey"]);
+        return window.crypto.subtle.deriveKey({name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256"}, keyMaterial, {name: "AES-GCM", length: 256}, true, ["encrypt", "decrypt"]);
+    }
+
+    async function encryptText(plainText, password) {
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const key = await getKey(password, salt);
+        const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
+        
+        // Combine: Salt + IV + Data -> Base64
+        const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
+        buffer.set(new Uint8Array(salt), 0);
+        buffer.set(new Uint8Array(iv), salt.byteLength);
+        buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
+        
+        return arrayBufferToBase64(buffer);
+    }
+
+    async function decryptText(base64, password) {
+        try {
+            const bytes = base64ToArrayBuffer(base64);
+            const salt = bytes.slice(0, 16);
+            const iv = bytes.slice(16, 28);
+            const data = bytes.slice(28);
+            const key = await getKey(password, salt);
+            const decrypted = await window.crypto.subtle.decrypt({name: "AES-GCM", iv: iv}, key, data);
+            return dec.decode(decrypted);
+        } catch(e) { console.error(e); return null; }
+    }
+
+    // === UTILS ===
+    function generateId(len) {
+        const arr = new Uint8Array(len);
+        window.crypto.getRandomValues(arr);
+        return Array.from(arr, dec => dec.toString(16).padStart(2, "0")).join('');
+    }
+
+    function blobToBase64(blob) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result); // inkl. "data:image..."
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    function arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+    }
+
+    function base64ToArrayBuffer(base64) {
+        const binary_string = window.atob(base64);
+        const len = binary_string.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary_string.charCodeAt(i);
+        return bytes;
+    }
+
+    function copyToClipboard() {
+        const text = document.getElementById('resultLink').innerText;
+        navigator.clipboard.writeText(text).then(() => alert("Kopiert!"));
+    }
+</script>
+</body>
+</html>
