@@ -150,7 +150,7 @@
         document.getElementById('imgPreviewContainer').style.display = 'none';
     }
 
-    async function createSecretLink() {
+   async function createSecretLink() {
         const text = document.getElementById('inpText').value;
         if(!text && !fileBlob) return alert("Bitte Text oder Bild eingeben.");
 
@@ -173,17 +173,16 @@
                 payload.i = await blobToBase64(fileBlob);
             }
 
-            // Stringify
             const jsonStr = JSON.stringify(payload);
-            
-            // Encrypt (Jetzt sicher für große Daten!)
             const encryptedData = await encryptText(jsonStr, password);
 
-            // Upload
             btn.innerText = "☁️ Lade hoch...";
+
+            // FIX: PUT Request benutzen!
+            // Das umgeht das 4KB Limit für Textnachrichten. ntfy macht daraus ein Attachment.
             const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
-                method: 'POST', 
-                body: encryptedData
+                method: 'PUT', 
+                body: encryptedData // Wir senden den Base64 String als Datei-Inhalt
             });
 
             if(!resp.ok) throw new Error("Upload Error: " + resp.status);
@@ -202,8 +201,7 @@
         }
     }
 
-    // === RECEIVER ===
-    async function receiveMessage() {
+   async function receiveMessage() {
         const params = new URLSearchParams(window.location.hash.substring(1));
         const topicId = params.get('id');
         const key = params.get('key');
@@ -220,12 +218,25 @@
             const textData = await resp.text();
             if(!textData || textData.trim() === "") throw new Error("Inhalt leer.");
 
-            // Parse NDJSON
             const lines = textData.trim().split('\n');
             const lastMsgObj = JSON.parse(lines[lines.length - 1]);
-            const encryptedStr = lastMsgObj.message;
+            
+            let encryptedStr = "";
 
-            if(!encryptedStr) throw new Error("Format Fehler.");
+            // FIX: Prüfen ob die Daten als Attachment vorliegen (weil sie groß waren)
+            if (lastMsgObj.attachment) {
+                document.getElementById('statusText').innerText = "Lade großes Paket...";
+                // Die URL ist meist relativ oder absolut, ntfy liefert "url" im attachment object
+                const attachUrl = lastMsgObj.attachment.url; 
+                // Attachment herunterladen (ist unser encrypted string)
+                const attachResp = await fetch(attachUrl);
+                encryptedStr = await attachResp.text();
+            } else {
+                // Klein genug für Text-Body
+                encryptedStr = lastMsgObj.message;
+            }
+
+            if(!encryptedStr) throw new Error("Format Fehler (Keine Daten).");
 
             // Decrypt
             const jsonStr = await decryptText(encryptedStr, key);
@@ -242,6 +253,7 @@
             const txtEl = document.getElementById('decryptedText');
             if(data.t && data.t.trim() !== "") {
                 txtEl.innerText = data.t;
+                txtEl.style.display = 'block';
             } else {
                 txtEl.style.display = 'none';
             }
@@ -251,6 +263,9 @@
                 imgEl.src = data.i;
                 imgEl.style.display = 'block';
             }
+
+            // Optional: Löschversuch beim Server
+            // fetch(`${NTFY_BASE}/${topicId}`, { method: 'DELETE' }).catch(e=>{});
 
         } catch(e) {
             console.error(e);
@@ -273,27 +288,31 @@
         return window.crypto.subtle.deriveKey({name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256"}, k, {name: "AES-GCM", length: 256}, true, ["encrypt", "decrypt"]);
     }
 
-    async function encryptText(plainText, password) {
+  async function encryptText(plainText, password) {
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         const key = await getKey(password, salt);
         const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
         
-        // Combine buffers
+        // Buffer zusammenbauen: Salt + IV + Daten
         const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
         buffer.set(new Uint8Array(salt), 0);
         buffer.set(new Uint8Array(iv), salt.byteLength);
         buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
         
-        // FIX: Chunked conversion to avoid Stack Overflow on large images
-        let binary = '';
-        const len = buffer.byteLength;
-        for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(buffer[i]);
-        }
-        return btoa(binary);
+        // FIX: Wir nutzen Blob -> Reader für perfekte Base64 Konvertierung ohne Stack-Limit
+        return new Promise((resolve) => {
+            const blob = new Blob([buffer]);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                // reader.result ist "data:application/octet-stream;base64,....."
+                // Wir wollen nur den Teil nach dem Komma
+                resolve(reader.result.split(',')[1]);
+            };
+            reader.readAsDataURL(blob);
+        });
     }
-
+    
     async function decryptText(base64, password) {
         try {
             const binary_string = window.atob(base64.trim());
