@@ -302,12 +302,17 @@
             const encData = await encryptText(JSON.stringify(payload), password);
 
             // Upload (PUT für Attachments Support)
-            const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
-                method: 'PUT', body: encData,
-                headers: { 'Cache': 'no' } // Versuche Caching zu steuern
+const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
+                method: 'PUT', 
+                body: encData,
+                headers: { 
+                    'Filename': 'secret.msg' // <--- WICHTIG: Damit akzeptiert ntfy auch große Daten!
+                } 
             });
+            
             if(!resp.ok) throw new Error("Upload Error " + resp.status);
 
+            
             // Link bauen
             const baseUrl = window.location.href.split('#')[0];
             let finalLink;
