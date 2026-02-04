@@ -270,19 +270,22 @@
         document.getElementById('senderImgPreview').src = "";
         document.getElementById('imgPreviewContainer').style.display = 'none';
     }
-
-    async function createLink(mode) {
-        const text = document.getElementById('inpText').value;
-        if(!text && !fileBlob) return alert("Leer?");
+async function createLink(mode) {
+        let text = document.getElementById('inpText').value;
+        // Fallback: Leerer Text ist okay, wenn Bild da ist
+        if(!text && !fileBlob) return alert("Bitte Text oder Bild eingeben.");
+        if(!text) text = " "; // Kleiner Placeholder damit JSON valid ist
 
         // Setup Params
         let topicId, password, isShort;
         
         if(mode === 'stored') {
-            // Nutze gespeicherte Config
-            topicId = storedConf.topic;
-            password = storedConf.key;
+            // WICHTIG: Trimmen, damit keine unsichtbaren Leerzeichen den Link kaputt machen
+            topicId = storedConf.topic.trim();
+            password = storedConf.key.trim();
             isShort = true;
+            
+            if(!topicId || !password) return alert("Bitte erst oben rechts ⚙️ Einstellungen ausfüllen!");
         } else {
             // Generiere neu
             topicId = "secmsg_" + generateId(12);
@@ -293,7 +296,8 @@
         // UI Feedback
         const btn = isShort ? document.getElementById('btnSendFamily') : document.querySelector('.send-options .btn-secondary');
         const originalText = btn.innerHTML;
-        btn.innerHTML = "⏳..."; btn.disabled = true;
+        btn.innerHTML = "⏳ Sende..."; 
+        btn.disabled = true;
 
         try {
             let payload = { t: text, i: null, ts: Date.now() };
@@ -301,30 +305,38 @@
 
             const encData = await encryptText(JSON.stringify(payload), password);
 
-            // Upload (PUT für Attachments Support)
-const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
+            // === FIX START ===
+            // 1. encodeURIComponent: Verhindert Fehler bei Sonderzeichen im Topic
+            // 2. ?ts=...: Zwingt den Browser/Server, das Caching zu ignorieren (Anti-Cache)
+            const safeTopic = encodeURIComponent(topicId);
+            const cacheBuster = Date.now(); 
+
+            const resp = await fetch(`${NTFY_BASE}/${safeTopic}?ts=${cacheBuster}`, {
                 method: 'PUT', 
                 body: encData,
                 headers: { 
-                    'Filename': 'secret.msg' // <--- WICHTIG: Damit akzeptiert ntfy auch große Daten!
-                } 
+                    // WICHTIG: 'Filename' sagt ntfy, dass es ein Anhang ist.
+                    // Das umgeht das 4096 Byte Limit für Textnachrichten!
+                    'Filename': 'secret.msg' 
+                },
+                cache: 'no-store' // Standard Fetch-Anweisung (besser als Header)
             });
-            
-            if(!resp.ok) throw new Error("Upload Error " + resp.status);
+            // === FIX END ===
 
-            
+            if(!resp.ok) throw new Error("Upload Error: " + resp.status);
+
             // Link bauen
             const baseUrl = window.location.href.split('#')[0];
             let finalLink;
             
             if(isShort) {
-                // Kurzer Link (Setzt voraus, Empfänger hat Config)
+                // Kurzer Link
                 finalLink = `${baseUrl}#read`;
                 document.getElementById('resultTypeLabel').innerText = "Familien Link (Kurz)";
                 document.getElementById('resultTypeLabel').style.color = "var(--accent)";
             } else {
                 // Langer Link (Enthält alles)
-                finalLink = `${baseUrl}#id=${topicId}&key=${password}`;
+                finalLink = `${baseUrl}#id=${safeTopic}&key=${password}`;
                 document.getElementById('resultTypeLabel').innerText = "Einmal-Link (Lang)";
                 document.getElementById('resultTypeLabel').style.color = "#aaa";
             }
@@ -333,12 +345,15 @@ const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
             showView('viewResult');
 
         } catch(e) {
-            alert("Fehler: " + e.message);
+            console.error(e);
+            alert("Fehler beim Senden: " + e.message);
+        } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
     }
 
+    
     // === RECEIVER LOGIC ===
     async function receiveMessage(mode) {
         let topicId, key;
