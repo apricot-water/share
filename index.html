@@ -5,34 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Secret Message</title>
 
-<!-- === WHATSAPP / SOCIAL PREVIEW === -->
+<!-- SOCIAL PREVIEW (Dein Bild hier einfügen) -->
 <meta property="og:title" content="🔒 Geheime Nachricht">
-<meta property="og:description" content="Verschlüsselter Inhalt. Tippen zum Öffnen.">
-<!-- Ersetze den langen Unsplash-Link durch den direkten Link zu deinem Bild -->
-<meta property="og:image" content="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/origamivault.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:description" content="Tippen zum Öffnen.">
+<meta property="og:image" content="https://images.unsplash.com/photo-1555421689-d68471e189f2?auto=format&fit=crop&w=1200&q=80">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#111111">
 
 <style>
-    :root { --bg: #111; --card: #222; --text: #eee; --accent: #00d26a; --danger: #ff4757; }
+    :root { --bg: #111; --card: #222; --text: #eee; --accent: #00d26a; --danger: #ff4757; --sub: #888; }
     body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
     
-    .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
-    .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; position: relative; }
+    .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; }
     
-    textarea, input { width: 100%; background: #333; border: none; color: white; padding: 15px; border-radius: 8px; font-size: 16px; resize: none; font-family: inherit; box-sizing: border-box; margin-bottom: 10px;}
+    h2 { margin: 0; font-size: 22px; text-align: center; }
+    .subtitle { text-align:center; color:var(--sub); font-size:12px; margin-bottom: 20px; }
+
+    /* Settings Toggle */
+    .settings-btn { position: absolute; top: 0; right: 0; background: none; border: none; font-size: 20px; cursor: pointer; padding: 10px; opacity: 0.5; }
+    .settings-area { background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; display: none; }
+    .settings-area.open { display: block; }
+    
+    label { font-size:11px; color:var(--sub); text-transform:uppercase; font-weight:bold; display: block; margin-bottom: 5px; }
+    textarea, input { width: 100%; background: #333; border: none; color: white; padding: 15px; border-radius: 8px; font-size: 16px; resize: none; font-family: inherit; box-sizing: border-box; margin-bottom: 15px;}
     textarea:focus, input:focus { outline: 2px solid var(--accent); }
     
-    .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+    /* Buttons */
+    .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 5px; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-primary { background: var(--accent); color: #000; }
-    .btn-danger { background: var(--danger); color: white; }
-    .btn-copy { background: #444; color: white; }
+    .btn-secondary { background: #444; color: white; }
+    .btn-danger { background: rgba(255, 71, 87, 0.2); color: var(--danger); border: 1px solid var(--danger); }
     .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* IMAGE PREVIEW AREA */
-    .img-wrapper { position: relative; display: none; margin-top: 10px; }
+    /* Special Send Options */
+    .send-options { display: flex; gap: 10px; margin-top: 10px; }
+    .send-options .btn { flex: 1; font-size: 13px; padding: 12px; flex-direction: column; gap: 5px; }
+
+    /* IMAGE PREVIEW */
+    .img-wrapper { position: relative; display: none; margin-top: 10px; margin-bottom: 15px; }
     .preview-img { width: 100%; max-height: 400px; object-fit: contain; border-radius: 8px; background: #000; display: block; margin: 0 auto; }
     .btn-remove-img { 
         position: absolute; top: 10px; right: 10px; 
@@ -43,24 +55,43 @@
     }
 
     .hidden { display: none !important; }
-    .loader { border: 4px solid #333; border-top: 4px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-    .link-box { word-break: break-all; background: #000; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; color: var(--accent); border: 1px dashed #555; }
+    .link-box { word-break: break-all; background: #000; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 11px; color: var(--accent); border: 1px dashed #555; margin-bottom: 15px; }
+    
+    .status-badge { 
+        background: #333; color: #aaa; font-size: 10px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 10px; 
+    }
 </style>
 </head>
 <body>
 
 <div class="container" id="app">
-    <h2 style="text-align:center; margin-bottom: 5px;">🔒 Secret Link</h2>
-    <div style="text-align:center; color:#777; font-size:12px; margin-bottom: 20px;">End-to-End Encrypted via Hash</div>
+    <!-- Header mit Settings Button -->
+    <div style="position: relative; width: 100%;">
+        <h2>🔒 Secret Message</h2>
+        <div class="subtitle">End-to-End Encrypted</div>
+        <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+    </div>
+
+    <!-- SETTINGS AREA -->
+    <div id="settingsArea" class="settings-area">
+        <h3 style="margin-top:0; font-size:14px; color:white;">⚙️ Kanal Konfiguration</h3>
+        <p style="font-size:12px; color:#888;">Speichere hier Topic & Key, um kurze Links zu nutzen.</p>
+        
+        <label>NTFY Topic (Kanal-ID)</label>
+        <input id="confTopic" placeholder="z.B. familie_geheim_123">
+        
+        <label>Passwort (AES Key)</label>
+        <input id="confKey" type="password" placeholder="Streng geheim">
+        
+        <button class="btn btn-secondary" onclick="saveConfig()">Speichern & Schließen</button>
+        <button class="btn" style="background:none; color:#666; font-size:12px; margin-top:5px;" onclick="clearConfig()">Konfiguration löschen</button>
+    </div>
 
     <!-- VIEW: SENDER -->
     <div id="viewSender" class="card">
-        <label style="font-size:12px; color:#aaa; text-transform:uppercase; font-weight:bold;">Nachricht</label>
-        <textarea id="inpText" rows="4" placeholder="Geheimtext hier..."></textarea>
+        <textarea id="inpText" rows="4" placeholder="Nachricht tippen..."></textarea>
         
-        <label style="font-size:12px; color:#aaa; text-transform:uppercase; font-weight:bold; display:block; margin-top:10px;">Oder Bild (Optional)</label>
+        <label>Bild anhängen (Optional)</label>
         <input type="file" id="inpFile" accept="image/*" onchange="handleFileSelect()">
         
         <div id="imgPreviewContainer" class="img-wrapper">
@@ -68,82 +99,164 @@
             <div class="btn-remove-img" onclick="clearImage()">✕</div>
         </div>
 
-        <button class="btn btn-primary" onclick="createSecretLink()">Link erstellen 🔗</button>
+        <div class="send-options">
+            <button class="btn btn-secondary" onclick="createLink('random')">
+                <span>🎲 Zufall</span>
+                <span style="font-weight:normal; font-size:10px; opacity:0.7">Langer Link</span>
+            </button>
+            <button id="btnSendFamily" class="btn btn-primary" onclick="createLink('stored')" disabled>
+                <span>👨‍👩‍👧‍👦 Familie</span>
+                <span style="font-weight:normal; font-size:10px; opacity:0.7">Kurzer Link</span>
+            </button>
+        </div>
+        <div id="configHint" style="text-align:center; font-size:10px; color:#555; margin-top:5px;">
+            Für "Familie" bitte erst ⚙️ Einstellungen ausfüllen.
+        </div>
     </div>
 
     <!-- VIEW: RESULT -->
     <div id="viewResult" class="card hidden" style="text-align:center;">
-        <h3>✅ Bereit!</h3>
-        <p style="color:#aaa; font-size:14px;">Der Link ist fertig.</p>
+        <h3 style="margin-top:0">✅ Bereit!</h3>
+        <div id="resultTypeLabel" class="status-badge">Zufalls-Link</div>
         
-        <div id="resultLink" class="link-box" style="margin-bottom:15px;">...</div>
+        <div id="resultLink" class="link-box">...</div>
         
-        <button class="btn btn-primary" onclick="shareLink()">📤 Via WhatsApp senden</button>
-        <button class="btn btn-copy" onclick="copyToClipboard()" style="margin-top:10px;">Link kopieren 📋</button>
-        <button class="btn" style="background:transparent; color:#888; font-size:12px;" onclick="location.reload()">Neuen erstellen</button>
+        <button class="btn btn-primary" onclick="shareLink()">📤 An WhatsApp senden</button>
+        <button class="btn btn-secondary" onclick="copyToClipboard()">Link kopieren</button>
+        <button class="btn" style="background:transparent; color:#888; font-size:12px;" onclick="location.reload()">Neu erstellen</button>
     </div>
 
-    <!-- VIEW: RECEIVER (Normal, keine Wischgesten) -->
+    <!-- VIEW: RECEIVER -->
     <div id="viewReceiver" class="card hidden">
-        <div id="loader" class="loader"></div>
-        <div id="statusText" style="text-align:center; margin-bottom:15px;">Lade geheime Daten...</div>
+        <div id="statusText" style="text-align:center; font-weight:bold; margin-bottom:10px;">Lade...</div>
         
         <div id="secretContent" class="hidden">
             <div style="background: #333; padding: 15px; border-radius: 8px; min-height: 50px; white-space: pre-wrap;" id="decryptedText"></div>
             <img id="decryptedImg" class="preview-img" style="margin-top:15px; display:none;">
             
-            <div style="margin-top:20px; font-size:11px; color:#666; text-align:center;">
-                Nachricht lokal entschlüsselt.
+            <!-- SAVE CREDENTIALS BUTTON (Nur bei Long Link) -->
+            <div id="saveCredsArea" class="hidden" style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
+                <p style="font-size:12px; color:#aaa; text-align:center; margin:0 0 10px 0;">
+                    Diesen Kanal für zukünftige <br><b>kurze Links</b> speichern?
+                </p>
+                <button class="btn btn-secondary" onclick="saveCurrentCreds()">💾 Kanal dauerhaft speichern</button>
             </div>
         </div>
+
+        <!-- NEW: SELF SEND BUTTON -->
+        <button class="btn btn-danger" style="margin-top:30px;" onclick="goToSender()">
+            🔄 Selbst etwas versenden
+        </button>
     </div>
 </div>
 
 <script>
     const NTFY_BASE = "https://ntfy.sh"; 
     let fileBlob = null;
+    let storedConf = { topic: '', key: '' };
+    
+    // Aktuell genutzte Credentials (für Empfänger Save-Button)
+    let currentReceiverCreds = null; 
 
     // === INIT ===
     (function init(){
-        if(window.location.hash.includes("id=") && window.location.hash.includes("key=")) {
+        loadConfig();
+        
+        const hash = window.location.hash;
+        
+        // 1. Long Link (Enthält ID & Key)
+        if(hash.includes("id=") && hash.includes("key=")) {
             showView('viewReceiver');
-            receiveMessage();
-        } else {
+            receiveMessage('long');
+        } 
+        // 2. Short Link (z.B. #read oder #msg) -> Nutze LocalStorage
+        else if(hash.includes("read") || hash.includes("short")) {
+            showView('viewReceiver');
+            receiveMessage('short');
+        }
+        // 3. Sender Mode
+        else {
             showView('viewSender');
         }
     })();
 
-    function showView(id) {
-        document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
-        document.getElementById(id).classList.remove('hidden');
+    // === CONFIG / STORAGE ===
+    function toggleSettings() {
+        document.getElementById('settingsArea').classList.toggle('open');
     }
 
-    // === SENDER: IMAGE HANDLING ===
+    function loadConfig() {
+        const raw = localStorage.getItem('secmsg_config');
+        if(raw) {
+            storedConf = JSON.parse(raw);
+            document.getElementById('confTopic').value = storedConf.topic;
+            document.getElementById('confKey').value = storedConf.key;
+            updateSenderUi(true);
+        } else {
+            updateSenderUi(false);
+        }
+    }
+
+    function saveConfig() {
+        const t = document.getElementById('confTopic').value.trim();
+        const k = document.getElementById('confKey').value.trim();
+        
+        if(t && k) {
+            storedConf = { topic: t, key: k };
+            localStorage.setItem('secmsg_config', JSON.stringify(storedConf));
+            updateSenderUi(true);
+            toggleSettings(); // Close
+        } else {
+            alert("Bitte Topic und Key ausfüllen.");
+        }
+    }
+
+    function clearConfig() {
+        localStorage.removeItem('secmsg_config');
+        storedConf = { topic: '', key: '' };
+        document.getElementById('confTopic').value = "";
+        document.getElementById('confKey').value = "";
+        updateSenderUi(false);
+    }
+
+    function updateSenderUi(hasConfig) {
+        const btn = document.getElementById('btnSendFamily');
+        const hint = document.getElementById('configHint');
+        
+        if(hasConfig) {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            hint.style.display = 'none';
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            hint.style.display = 'block';
+        }
+    }
+    
+    function goToSender() {
+        // Hash entfernen ohne History zuzumüllen
+        history.pushState("", document.title, window.location.pathname + window.location.search);
+        location.reload();
+    }
+
+    // === SENDER LOGIC ===
     function handleFileSelect() {
         const file = document.getElementById('inpFile').files[0];
         if(!file) return;
-        
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const MAX_WIDTH = 800; 
-                let width = img.width;
-                let height = img.height;
-
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-                canvas.width = width;
-                canvas.height = height;
+                let width = img.width; let height = img.height;
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                canvas.width = width; canvas.height = height;
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0, width, height);
-                
                 document.getElementById('senderImgPreview').src = canvas.toDataURL("image/jpeg", 0.6);
                 document.getElementById('imgPreviewContainer').style.display = 'block';
-
                 canvas.toBlob((b) => { fileBlob = b; }, 'image/jpeg', 0.6);
             }
             img.src = e.target.result;
@@ -158,61 +271,92 @@
         document.getElementById('imgPreviewContainer').style.display = 'none';
     }
 
-    async function createSecretLink() {
+    async function createLink(mode) {
         const text = document.getElementById('inpText').value;
-        if(!text && !fileBlob) return alert("Bitte Text oder Bild eingeben.");
+        if(!text && !fileBlob) return alert("Leer?");
 
-        const btn = document.querySelector('#viewSender button.btn-primary');
-        const oldBtnText = btn.innerText;
-        btn.innerText = "⏳ Verschlüssele...";
-        btn.disabled = true;
+        // Setup Params
+        let topicId, password, isShort;
+        
+        if(mode === 'stored') {
+            // Nutze gespeicherte Config
+            topicId = storedConf.topic;
+            password = storedConf.key;
+            isShort = true;
+        } else {
+            // Generiere neu
+            topicId = "secmsg_" + generateId(12);
+            password = generateId(16);
+            isShort = false;
+        }
+
+        // UI Feedback
+        const btn = isShort ? document.getElementById('btnSendFamily') : document.querySelector('.send-options .btn-secondary');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "⏳..."; btn.disabled = true;
 
         try {
-            const topicId = "secmsg_" + generateId(12); 
-            const password = generateId(16);
+            let payload = { t: text, i: null, ts: Date.now() };
+            if(fileBlob) payload.i = await blobToBase64(fileBlob);
 
-            let payload = {
-                t: text,
-                i: null,
-                ts: Date.now()
-            };
+            const encData = await encryptText(JSON.stringify(payload), password);
 
-            if(fileBlob) {
-                payload.i = await blobToBase64(fileBlob);
+            // Upload (PUT für Attachments Support)
+            const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
+                method: 'PUT', body: encData,
+                headers: { 'Cache': 'no' } // Versuche Caching zu steuern
+            });
+            if(!resp.ok) throw new Error("Upload Error " + resp.status);
+
+            // Link bauen
+            const baseUrl = window.location.href.split('#')[0];
+            let finalLink;
+            
+            if(isShort) {
+                // Kurzer Link (Setzt voraus, Empfänger hat Config)
+                finalLink = `${baseUrl}#read`;
+                document.getElementById('resultTypeLabel').innerText = "Familien Link (Kurz)";
+                document.getElementById('resultTypeLabel').style.color = "var(--accent)";
+            } else {
+                // Langer Link (Enthält alles)
+                finalLink = `${baseUrl}#id=${topicId}&key=${password}`;
+                document.getElementById('resultTypeLabel').innerText = "Einmal-Link (Lang)";
+                document.getElementById('resultTypeLabel').style.color = "#aaa";
             }
 
-            const jsonStr = JSON.stringify(payload);
-            const encryptedData = await encryptText(jsonStr, password);
-
-            btn.innerText = "☁️ Lade hoch...";
-
-            // Use PUT to allow larger payloads (attachments)
-            const resp = await fetch(`${NTFY_BASE}/${topicId}`, {
-                method: 'PUT', 
-                body: encryptedData
-            });
-
-            if(!resp.ok) throw new Error("Upload Error: " + resp.status);
-
-            const baseUrl = window.location.href.split('#')[0];
-            const secretLink = `${baseUrl}#id=${topicId}&key=${password}`;
-
-            document.getElementById('resultLink').innerText = secretLink;
+            document.getElementById('resultLink').innerText = finalLink;
             showView('viewResult');
 
         } catch(e) {
             alert("Fehler: " + e.message);
-            console.error(e);
-            btn.innerText = oldBtnText;
+            btn.innerHTML = originalText;
             btn.disabled = false;
         }
     }
 
-    // === RECEIVER ===
-    async function receiveMessage() {
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        const topicId = params.get('id');
-        const key = params.get('key');
+    // === RECEIVER LOGIC ===
+    async function receiveMessage(mode) {
+        let topicId, key;
+
+        if(mode === 'short') {
+            // Versuche aus LocalStorage zu laden
+            if(!storedConf.topic || !storedConf.key) {
+                document.getElementById('statusText').innerText = "❌ Fehler: Keine Zugangsdaten gespeichert.";
+                document.getElementById('statusText').style.color = "var(--danger)";
+                return;
+            }
+            topicId = storedConf.topic;
+            key = storedConf.key;
+        } else {
+            // Hole aus URL
+            const params = new URLSearchParams(window.location.hash.substring(1));
+            topicId = params.get('id');
+            key = params.get('key');
+            
+            // Speichere temporär für den "Save" Button
+            currentReceiverCreds = { topic: topicId, key: key };
+            // Zeige Save-Button an, wenn Decrypt klappt
+        }
 
         if(!topicId || !key) {
             document.getElementById('statusText').innerText = "Link defekt.";
@@ -220,144 +364,105 @@
         }
 
         try {
+            // Poll=1 holt die neueste gecachte Nachricht
             const resp = await fetch(`${NTFY_BASE}/${topicId}/json?poll=1`);
-            if(!resp.ok) throw new Error("Nachricht weg oder 404.");
+            if(!resp.ok) throw new Error("Keine Nachricht gefunden.");
             
             const textData = await resp.text();
-            if(!textData || textData.trim() === "") throw new Error("Inhalt leer.");
+            if(!textData.trim()) throw new Error("Kanal leer.");
 
+            // Parse NDJSON (Last Line)
             const lines = textData.trim().split('\n');
             const lastMsgObj = JSON.parse(lines[lines.length - 1]);
             
             let encryptedStr = "";
-
             if (lastMsgObj.attachment) {
-                document.getElementById('statusText').innerText = "Lade großes Paket...";
-                const attachUrl = lastMsgObj.attachment.url; 
-                const attachResp = await fetch(attachUrl);
+                const attachResp = await fetch(lastMsgObj.attachment.url);
                 encryptedStr = await attachResp.text();
             } else {
                 encryptedStr = lastMsgObj.message;
             }
 
-            if(!encryptedStr) throw new Error("Format Fehler.");
-
             const jsonStr = await decryptText(encryptedStr, key);
-            if(!jsonStr) throw new Error("Falscher Key oder Daten korrupt.");
+            if(!jsonStr) throw new Error("Falscher Key / Datenmüll.");
 
             const data = JSON.parse(jsonStr);
 
-            document.getElementById('loader').classList.add('hidden');
+            // SUCCESS UI
             document.getElementById('secretContent').classList.remove('hidden');
-            document.getElementById('statusText').innerText = "🔓 Entschlüsselt";
+            document.getElementById('statusText').innerText = "🔓 Nachricht entschlüsselt";
             document.getElementById('statusText').style.color = "var(--accent)";
 
             const txtEl = document.getElementById('decryptedText');
-            if(data.t && data.t.trim() !== "") {
-                txtEl.innerText = data.t;
-                txtEl.style.display = 'block';
-            } else {
-                txtEl.style.display = 'none';
-            }
+            if(data.t) { txtEl.innerText = data.t; txtEl.style.display='block'; } 
+            else txtEl.style.display='none';
 
             if(data.i) {
                 const imgEl = document.getElementById('decryptedImg');
-                imgEl.src = data.i;
-                imgEl.style.display = 'block';
+                imgEl.src = data.i; imgEl.style.display='block';
+            }
+
+            // Button anzeigen, wenn wir im Long Mode sind UND noch nichts gespeichert haben (oder was anderes)
+            if(mode === 'long') {
+                document.getElementById('saveCredsArea').classList.remove('hidden');
             }
 
         } catch(e) {
             console.error(e);
-            document.getElementById('loader').classList.add('hidden');
-            document.getElementById('statusText').innerText = "❌ Fehler: " + e.message;
+            document.getElementById('statusText').innerText = "❌ " + e.message;
             document.getElementById('statusText').style.color = "var(--danger)";
         }
     }
 
-    // === CRYPTO UTILS ===
+    function saveCurrentCreds() {
+        if(currentReceiverCreds) {
+            if(confirm("Diesen Kanal als Standard speichern? Alte Einstellungen werden überschrieben.")) {
+                localStorage.setItem('secmsg_config', JSON.stringify(currentReceiverCreds));
+                // Reloaden in den gespeicherten Zustand, damit man sieht dass es geklappt hat
+                storedConf = currentReceiverCreds;
+                document.getElementById('saveCredsArea').classList.add('hidden');
+                alert("Gespeichert! Du kannst jetzt kurze Links empfangen.");
+            }
+        }
+    }
+
+    function showView(id) {
+        document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    // === CRYPTO / UTILS ===
     const enc = new TextEncoder(); const dec = new TextDecoder();
-
-    async function getKey(pass, salt) {
-        const k = await window.crypto.subtle.importKey("raw", enc.encode(pass), {name: "PBKDF2"}, false, ["deriveKey"]);
-        return window.crypto.subtle.deriveKey({name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256"}, k, {name: "AES-GCM", length: 256}, true, ["encrypt", "decrypt"]);
+    async function getKey(p, s){ 
+        const k=await window.crypto.subtle.importKey("raw",enc.encode(p),{name:"PBKDF2"},false,["deriveKey"]); 
+        return window.crypto.subtle.deriveKey({name:"PBKDF2",salt:s,iterations:100000,hash:"SHA-256"},k,{name:"AES-GCM",length:256},true,["encrypt","decrypt"]); 
     }
-
-    async function encryptText(plainText, password) {
-        const salt = window.crypto.getRandomValues(new Uint8Array(16));
-        const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        const key = await getKey(password, salt);
-        const encrypted = await window.crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(plainText));
-        
-        const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
-        buffer.set(new Uint8Array(salt), 0);
-        buffer.set(new Uint8Array(iv), salt.byteLength);
-        buffer.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
-        
-        return new Promise((resolve) => {
-            const blob = new Blob([buffer]);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                resolve(reader.result.split(',')[1]);
-            };
-            reader.readAsDataURL(blob);
-        });
+    async function encryptText(txt, pass){ 
+        const s=window.crypto.getRandomValues(new Uint8Array(16)); 
+        const iv=window.crypto.getRandomValues(new Uint8Array(12)); 
+        const k=await getKey(pass,s); 
+        const e=await window.crypto.subtle.encrypt({name:"AES-GCM",iv:iv},k,enc.encode(txt)); 
+        const b=new Uint8Array(s.byteLength+iv.byteLength+e.byteLength); 
+        b.set(new Uint8Array(s),0); b.set(new Uint8Array(iv),s.byteLength); b.set(new Uint8Array(e),s.byteLength+iv.byteLength); 
+        return new Promise(r=>{const bl=new Blob([b]); const fr=new FileReader(); fr.onloadend=()=>r(fr.result.split(',')[1]); fr.readAsDataURL(bl);});
     }
-
-    async function decryptText(base64, password) {
+    async function decryptText(b64, pass) {
         try {
-            const binary_string = window.atob(base64.trim());
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) bytes[i] = binary_string.charCodeAt(i);
-
-            const salt = bytes.slice(0, 16);
-            const iv = bytes.slice(16, 28);
-            const data = bytes.slice(28);
-            
-            const key = await getKey(password, salt);
-            const decrypted = await window.crypto.subtle.decrypt({name: "AES-GCM", iv: iv}, key, data);
-            return dec.decode(decrypted);
-        } catch(e) { 
-            console.error("Decrypt Fail", e); 
-            return null; 
-        }
+            const str=window.atob(b64.trim()); const len=str.length; const bytes=new Uint8Array(len); 
+            for(let i=0;i<len;i++) bytes[i]=str.charCodeAt(i);
+            const s=bytes.slice(0,16); const iv=bytes.slice(16,28); const d=bytes.slice(28); 
+            const k=await getKey(pass,s); 
+            const decBuf=await window.crypto.subtle.decrypt({name:"AES-GCM",iv:iv},k,d); 
+            return dec.decode(decBuf);
+        } catch(e){ return null; }
     }
-
-    // === HELPERS ===
-    function generateId(len) {
-        const arr = new Uint8Array(len);
-        window.crypto.getRandomValues(arr);
-        return Array.from(arr, dec => dec.toString(16).padStart(2, "0")).join('');
-    }
-
-    function blobToBase64(blob) {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-        });
-    }
-
-    function copyToClipboard() {
-        const text = document.getElementById('resultLink').innerText;
-        navigator.clipboard.writeText(text).then(() => alert("Kopiert!"));
-    }
-
-    async function shareLink() {
-        const text = document.getElementById('resultLink').innerText;
-        
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: 'Geheime Nachricht',
-                    text: '🔒 Ich habe dir eine verschlüsselte Nachricht gesendet. Tippe zum Öffnen:',
-                    url: text
-                });
-            } catch (err) {}
-        } else {
-            copyToClipboard();
-            alert("Dein Browser unterstützt kein Teilen. Link kopiert.");
-        }
+    function generateId(l){ const a=new Uint8Array(l); window.crypto.getRandomValues(a); return Array.from(a,d=>d.toString(16).padStart(2,"0")).join(''); }
+    function blobToBase64(b){ return new Promise(r=>{const fr=new FileReader(); fr.onloadend=()=>r(fr.result); fr.readAsDataURL(b);}); }
+    function copyToClipboard(){ navigator.clipboard.writeText(document.getElementById('resultLink').innerText).then(()=>alert("Kopiert!")); }
+    async function shareLink(){ 
+        const txt=document.getElementById('resultLink').innerText; 
+        if(navigator.share){ try{await navigator.share({title:'Geheime Nachricht',text:'🔒 Nachricht für dich:',url:txt});}catch(e){}} 
+        else{copyToClipboard();alert("Link kopiert (Browser unterstützt kein Teilen)");} 
     }
 </script>
 </body>
