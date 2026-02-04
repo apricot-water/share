@@ -288,8 +288,8 @@ async function createLink(mode) {
             if(!topicId || !password) return alert("Bitte erst oben rechts ⚙️ Einstellungen ausfüllen!");
         } else {
             // Generiere neu
-            topicId = "secmsg_" + generateId(12);
-            password = generateId(16);
+            topicId = "secmsg_" + generateId(24);
+            password = generateId(30);
             isShort = false;
         }
 
